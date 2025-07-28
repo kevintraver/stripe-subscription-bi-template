@@ -1,9 +1,14 @@
 ## Relevant Files
 
 - `src/agents/subscription-bi-agent.ts` - Main conversational agent for subscription business intelligence queries
-- `src/agents/subscription-bi-agent.test.ts` - Unit tests for the subscription BI agent
-- `src/tools/stripe-mrr-tool.ts` - Tool for calculating Monthly Recurring Revenue from Stripe data
-- `src/tools/stripe-mrr-tool.test.ts` - Unit tests for MRR calculation tool
+- `test/agents/subscription-bi-agent.test.ts` - Unit tests for the subscription BI agent
+- `src/mastra/tools/stripe-mrr-tool.ts` - Tool for calculating Monthly Recurring Revenue from Stripe data
+- `test/mastra/tools/stripe-mrr-tool.test.ts` - Unit tests for MRR calculation tool
+- `src/utils/subscription-calculations.ts` - Shared calculation utilities for subscription metrics
+- `test/utils/subscription-calculations.test.ts` - Unit tests for calculation utilities
+- `src/schemas/subscription-metrics.ts` - Zod schemas for input/output validation of subscription tools
+- `src/types/subscription-types.ts` - TypeScript type definitions for subscription data structures
+- `vitest.config.ts` - Vitest configuration file for running tests
 - `src/tools/stripe-arpu-tool.ts` - Tool for calculating Average Revenue Per User
 - `src/tools/stripe-arpu-tool.test.ts` - Unit tests for ARPU calculation tool
 - `src/tools/stripe-churn-tool.ts` - Tool for calculating customer and revenue churn rates
@@ -28,14 +33,9 @@
 
 - [ ] 1.0 Set up Stripe MCP Integration Infrastructure
   - [x] 1.1 Install and configure Mastra MCPClient for Stripe MCP server connection
-  - [ ] 1.2 Create Stripe MCP client service with proper authentication handling and API key management
-  - [ ] 1.3 Implement rate limiting and retry logic for Stripe API calls to handle API limits gracefully
-  - [ ] 1.4 Set up error handling for connection failures and API timeouts with user-friendly error messages
-  - [ ] 1.5 Implement session-level caching strategy for Stripe data to avoid redundant API calls within conversations
-  - [ ] 1.6 Create utility functions for Stripe data transformation (status filtering, currency conversion, billing period normalization)
 
-- [ ] 2.0 Implement Core Subscription Metric Calculation Tools
-  - [ ] 2.1 Create MRR calculation tool with Zod schema validation for summing active subscription amounts and normalizing billing periods
+- [ ] 2.0 Implement Core Subscription Metric Calculation Mastra Tools
+  - [x] 2.1 Create MRR calculation tool with Zod schema validation for summing active subscription amounts and normalizing billing periods
   - [ ] 2.2 Implement Active Subscribers count tool to identify unique customers with active subscription status
   - [ ] 2.3 Build ARPU calculation tool that divides current MRR by active subscriber count with dependency on MRR tool
   - [ ] 2.4 Develop Customer Churn Rate tool to calculate percentage of customers who canceled in current month

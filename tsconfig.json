@@ -11,5 +11,6 @@
     "outDir": "dist",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.js", "node_modules", "dist"]
 }
