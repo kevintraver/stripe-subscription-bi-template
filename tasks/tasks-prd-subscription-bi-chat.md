@@ -12,8 +12,8 @@
 - `src/tools/stripe-ltv-tool.test.ts` - Unit tests for LTV calculation tool
 - `src/tools/stripe-subscriber-count-tool.ts` - Tool for counting active subscribers
 - `src/tools/stripe-subscriber-count-tool.test.ts` - Unit tests for subscriber count tool
-- `src/services/stripe-mcp-client.ts` - MCP client service for Stripe API interactions
-- `src/services/stripe-mcp-client.test.ts` - Unit tests for Stripe MCP client
+- `src/mastra/mcp/mcp-client.ts` - Updated MCP client configuration to include both local and Stripe MCP server connections
+- `src/scripts/test-stripe-mcp.ts` - Test script for verifying MCP client connection to both local and Stripe servers
 - `src/utils/subscription-calculations.ts` - Utility functions for subscription metric calculations
 - `src/utils/subscription-calculations.test.ts` - Unit tests for calculation utilities
 - `src/schemas/subscription-metrics.ts` - Zod schemas for input/output validation of subscription tools
@@ -27,7 +27,7 @@
 ## Tasks
 
 - [ ] 1.0 Set up Stripe MCP Integration Infrastructure
-  - [ ] 1.1 Install and configure Mastra MCPClient for Stripe MCP server connection
+  - [x] 1.1 Install and configure Mastra MCPClient for Stripe MCP server connection
   - [ ] 1.2 Create Stripe MCP client service with proper authentication handling and API key management
   - [ ] 1.3 Implement rate limiting and retry logic for Stripe API calls to handle API limits gracefully
   - [ ] 1.4 Set up error handling for connection failures and API timeouts with user-friendly error messages

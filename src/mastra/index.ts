@@ -3,6 +3,7 @@ import { registerApiRoute } from '@mastra/core/server';
 import { PinoLogger } from '@mastra/loggers';
 import { mcpServer } from './mcp/mcp-server';
 import { docsAgent } from './agents/docs-agent';
+import { mcpClient } from './mcp/mcp-client';
 
 export const mastra = new Mastra({
   agents: {
@@ -26,6 +27,10 @@ export const mastra = new Mastra({
             services: {
               agents: ['docsAgent'],
               workflows: [],
+              mcp: {
+                servers: ['localTools', 'stripe'],
+                status: 'configured',
+              },
             },
           });
         },
@@ -34,16 +39,30 @@ export const mastra = new Mastra({
         method: 'GET',
         handler: async c => {
           return c.json({
-            mcpServer: {
-              name: 'Example docs MCP Server',
-              version: '1.0.0',
-              availableTransports: ['http', 'sse'],
-              endpoints: {
-                http: process.env.MCP_SERVER_URL || 'http://localhost:4111/mcp',
+            mcpServers: {
+              localTools: {
+                name: 'Local docs MCP Server',
+                version: '1.0.0',
+                availableTransports: ['http', 'sse'],
+                endpoints: {
+                  http: process.env.MCP_SERVER_URL || 'http://localhost:4111/mcp',
+                },
+                availableTools: ['docsTool'],
+                status: 'configured',
               },
-              availableTools: ['docsTool'],
-              availableAgents: ['docsAgent'],
+              stripe: {
+                name: 'Official Stripe MCP Server',
+                version: '1.0.0',
+                availableTransports: ['https'],
+                endpoints: {
+                  https: 'https://mcp.stripe.com',
+                },
+                availableTools: ['stripe_*'],
+                status: 'configured',
+                authRequired: true,
+              },
             },
+            availableAgents: ['docsAgent'],
           });
         },
       }),

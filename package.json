@@ -8,7 +8,8 @@
     "build": "mastra build",
     "start": "mastra start",
     "mcp:server": "tsx src/scripts/mcp-server-http.ts",
-    "planets:demo": "tsx src/examples/planets-demo.ts"
+    "planets:demo": "tsx src/examples/planets-demo.ts",
+    "test:mcp": "tsx src/scripts/test-stripe-mcp.ts"
   },
   "keywords": [],
   "author": "",
