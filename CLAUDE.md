@@ -4,7 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Mastra-based template for building documentation chatbots using MCP (Model Control Protocol) servers. It demonstrates how to create an MCP server that exposes tools for interacting with documentation (currently planet/space data) and an agent that can use those tools.
+This is a Mastra-based template for building subscription business intelligence chat systems using MCP (Model Control Protocol) servers. The system enables SaaS business owners to obtain subscription metrics through natural language conversations by calculating key subscription metrics from Stripe data on-demand.
+
+## Task Management
+
+Development is managed through the `/tasks` folder structure:
+
+- **PRD Documents**: Each feature has a Product Requirements Document (PRD) that defines the goals, user stories, functional requirements, and technical considerations
+- **Task Lists**: Matching task files break down the PRD into specific, actionable development tasks with clear dependencies and testing requirements
+- **Current Focus**: The primary development focus is implementing a subscription BI chat system as defined in:
+  - `tasks/prd-subscription-bi-chat.md` - Complete PRD for the subscription BI feature
+  - `tasks/tasks-prd-subscription-bi-chat.md` - Detailed task breakdown with file structure and testing approach
+
+### Task Structure
+Tasks are organized in priority order with clear dependencies:
+1. **Stripe MCP Integration Infrastructure** - Core connectivity and data handling
+2. **Core Subscription Metric Calculation Tools** - Individual tools for each business metric (MRR, ARPU, Churn, LTV, etc.)
+3. **Conversational Agent** - Natural language interface with business intelligence context
+4. **Tool Orchestration** - Dependency management and intelligent tool selection
+5. **Testing Suite** - Comprehensive validation framework
 
 ## Development Commands
 
@@ -20,7 +38,7 @@ This is a Mastra-based template for building documentation chatbots using MCP (M
 
 ## Architecture
 
-### Core Components
+### Current Implementation (Template)
 
 **Mastra Application** (`src/mastra/index.ts`)
 - Main application configuration with agents, MCP servers, and API routes
@@ -46,12 +64,29 @@ This is a Mastra-based template for building documentation chatbots using MCP (M
 - Returns function details including arguments, types, and tips
 - Supports random function selection when no specific function requested
 
-### Data Structure
+### Target Implementation (Subscription BI)
 
-**Functions Data** (`src/data/functions.json`)
-- Contains mock planetary/space function definitions
-- Each function includes description, arguments (with types/requirements), and usage tips
-- Replace this with your actual documentation data
+Based on the PRD and task structure, the system will be refactored to include:
+
+**Subscription BI Agent** (`src/agents/subscription-bi-agent.ts`)
+- Conversational agent specialized for subscription business intelligence queries
+- Interprets natural language requests for metrics like MRR, churn, ARPU, LTV
+- Provides explanations of calculations and business context
+
+**Stripe MCP Integration** (`src/services/stripe-mcp-client.ts`)
+- Connects to official Stripe MCP server for reliable data access
+- Handles authentication, rate limiting, and error recovery
+- Implements session-level caching for conversation efficiency
+
+**Metric Calculation Tools** (`src/tools/stripe-*-tool.ts`)
+- Individual tools for each subscription metric (MRR, ARPU, Churn, LTV, etc.)
+- Proper Zod schema validation and dependency management
+- Human-readable explanations included in tool outputs
+
+**Supporting Infrastructure**
+- `src/utils/subscription-calculations.ts` - Shared calculation utilities
+- `src/schemas/subscription-metrics.ts` - Input/output validation schemas  
+- `src/types/subscription-types.ts` - TypeScript definitions for subscription data
 
 ## Environment Variables
 
@@ -63,21 +98,24 @@ Required environment variables (see `.env.example`):
 - `PORT` - Application port (default: 4112)
 - `MCP_PORT` - MCP server port (default: 4111)
 
-## Customization
+## Development Workflow
+
+### Task-Driven Development
+1. **Review PRD**: Understand feature requirements in `tasks/prd-*.md`
+2. **Follow Task List**: Work through tasks in `tasks/tasks-*.md` in dependency order
+3. **Test-Driven**: Each implementation file should have corresponding `.test.ts` file
+4. **Validation**: Run `pnpm test` to ensure all tests pass before moving to next task
 
 ### Adding New Tools
-1. Create tool in `src/mastra/tools/`
-2. Register in MCP server (`src/mastra/mcp/mcp-server.ts`)
-3. Tool automatically becomes available to agents via MCP client
+1. Create tool in `src/tools/` following the naming pattern `stripe-*-tool.ts`
+2. Include Zod schemas for input/output validation
+3. Write comprehensive unit tests in corresponding `.test.ts` file
+4. Register tool with the Mastra application for agent access
 
-### Modifying Data Source
-- Replace `src/data/functions.json` with your documentation data
-- Update tool logic in `src/mastra/tools/docs-tool.ts` to match your data structure
-
-### Agent Configuration
-- Agents automatically receive tools from MCP server
-- Modify agent instructions in `src/mastra/agents/docs-agent.ts`
-- Agent uses OpenAI GPT-4.1 model by default
+### Modifying Agent Behavior
+- Update agent instructions in `src/agents/subscription-bi-agent.ts`
+- Focus on business intelligence context and metric interpretation
+- Ensure agent can explain calculation methodologies to business users
 
 ## Key Patterns
 
