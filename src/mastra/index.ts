@@ -4,10 +4,14 @@ import { PinoLogger } from '@mastra/loggers';
 import { mcpServer } from './mcp/mcp-server';
 import { docsAgent } from './agents/docs-agent';
 import { mcpClient } from './mcp/mcp-client';
+import { mrrCalculationWorkflow } from './workflows/mrr-calculation-workflow';
 
 export const mastra = new Mastra({
   agents: {
     docsAgent,
+  },
+  workflows: {
+    mrrCalculationWorkflow,
   },
   mcpServers: {
     kepler: mcpServer,
@@ -26,7 +30,7 @@ export const mastra = new Mastra({
             version: '1.0.0',
             services: {
               agents: ['docsAgent'],
-              workflows: [],
+              workflows: ['mrrCalculationWorkflow'],
               mcp: {
                 servers: ['localTools', 'stripe'],
                 status: 'configured',

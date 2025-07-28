@@ -4,6 +4,7 @@
 - `test/agents/subscription-bi-agent.test.ts` - Unit tests for the subscription BI agent
 - `src/mastra/tools/stripe-mrr-tool.ts` - Tool for calculating Monthly Recurring Revenue from Stripe data
 - `test/mastra/tools/stripe-mrr-tool.test.ts` - Unit tests for MRR calculation tool
+- `src/mastra/workflows/mrr-calculation-workflow.ts` - Mastra workflow that fetches Stripe data and calculates MRR using proper workflow steps
 - `src/utils/subscription-calculations.ts` - Shared calculation utilities for subscription metrics
 - `test/utils/subscription-calculations.test.ts` - Unit tests for calculation utilities
 - `src/schemas/subscription-metrics.ts` - Zod schemas for input/output validation of subscription tools
