@@ -4,6 +4,8 @@ import {
   isSubscriptionActiveForMRR,
   calculateSubscriptionMRR,
   getBillingIntervalDescription,
+  calculateUniqueCustomerCount,
+  calculateARPU,
 } from '../../src/utils/subscription-calculations.js';
 import type { StripeSubscription } from '../../src/types/subscription-types.js';
 
@@ -236,5 +238,88 @@ describe('getBillingIntervalDescription', () => {
 
   it('should handle missing interval count', () => {
     expect(getBillingIntervalDescription('month')).toBe('month');
+  });
+});
+
+describe('calculateUniqueCustomerCount', () => {
+  const createMockSubscription = (customerId: string): StripeSubscription => ({
+    id: `sub_${customerId}`,
+    status: 'active',
+    customer: customerId,
+    current_period_start: 1640995200,
+    current_period_end: 1643673600,
+    created: 1640995200,
+    cancel_at_period_end: false,
+    trial_start: null,
+    trial_end: null,
+    items: { data: [] },
+  });
+
+  it('should count unique customers correctly', () => {
+    const subscriptions = [
+      createMockSubscription('cus_1'),
+      createMockSubscription('cus_2'),
+      createMockSubscription('cus_3'),
+    ];
+    
+    expect(calculateUniqueCustomerCount(subscriptions)).toBe(3);
+  });
+
+  it('should handle duplicate customers correctly', () => {
+    const subscriptions = [
+      createMockSubscription('cus_1'),
+      createMockSubscription('cus_1'), // Duplicate customer
+      createMockSubscription('cus_2'),
+    ];
+    
+    expect(calculateUniqueCustomerCount(subscriptions)).toBe(2);
+  });
+
+  it('should handle empty subscription array', () => {
+    expect(calculateUniqueCustomerCount([])).toBe(0);
+  });
+
+  it('should handle subscriptions without customer field', () => {
+    const subscriptionWithoutCustomer = {
+      ...createMockSubscription('cus_1'),
+      customer: undefined as any,
+    };
+    
+    const subscriptions = [
+      subscriptionWithoutCustomer,
+      createMockSubscription('cus_2'),
+    ];
+    
+    expect(calculateUniqueCustomerCount(subscriptions)).toBe(1);
+  });
+});
+
+describe('calculateARPU', () => {
+  it('should calculate ARPU correctly', () => {
+    const totalMRR = 100;
+    const customerCount = 4;
+    
+    expect(calculateARPU(totalMRR, customerCount)).toBe(25);
+  });
+
+  it('should handle zero customers gracefully', () => {
+    const totalMRR = 100;
+    const customerCount = 0;
+    
+    expect(calculateARPU(totalMRR, customerCount)).toBe(0);
+  });
+
+  it('should round result to 2 decimal places', () => {
+    const totalMRR = 100;
+    const customerCount = 3;
+    
+    expect(calculateARPU(totalMRR, customerCount)).toBe(33.33); // 100/3 = 33.333...
+  });
+
+  it('should handle zero MRR', () => {
+    const totalMRR = 0;
+    const customerCount = 5;
+    
+    expect(calculateARPU(totalMRR, customerCount)).toBe(0);
   });
 });

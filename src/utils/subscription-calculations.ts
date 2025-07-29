@@ -94,3 +94,29 @@ export function getBillingIntervalDescription(
   }
   return `${intervalCount}-${interval}`;
 }
+
+/**
+ * Counts unique customers from a list of subscriptions
+ */
+export function calculateUniqueCustomerCount(subscriptions: StripeSubscription[]): number {
+  const uniqueCustomers = new Set<string>();
+  
+  for (const subscription of subscriptions) {
+    if (subscription.customer) {
+      uniqueCustomers.add(subscription.customer);
+    }
+  }
+  
+  return uniqueCustomers.size;
+}
+
+/**
+ * Calculates ARPU (Average Revenue Per User) from MRR and customer count
+ */
+export function calculateARPU(totalMRR: number, customerCount: number): number {
+  if (customerCount === 0) {
+    return 0;
+  }
+  
+  return Math.round((totalMRR / customerCount) * 100) / 100; // Round to 2 decimal places
+}
