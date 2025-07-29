@@ -9,6 +9,7 @@ export interface StripeSubscription {
       id: string;
       price: {
         id: string;
+        nickname?: string;
         unit_amount: number | null;
         currency: string;
         recurring: {
@@ -21,6 +22,7 @@ export interface StripeSubscription {
   };
   created: number;
   cancel_at_period_end: boolean;
+  canceled_at?: number | null;
   trial_start: number | null;
   trial_end: number | null;
 }

@@ -9,6 +9,9 @@ import {
   groupSubscriptionsByStatus,
   countActiveSubscriptions,
   calculateSubscriptionGrowthMetrics,
+  identifyChurnedCustomers,
+  calculateChurnRate,
+  groupChurnedByReason,
 } from '../../src/utils/subscription-calculations.js';
 import type { StripeSubscription } from '../../src/types/subscription-types.js';
 
@@ -469,5 +472,124 @@ describe('calculateSubscriptionGrowthMetrics', () => {
     expect(result.newSubscriptions).toBe(1);
     expect(result.existingSubscriptions).toBe(2);
     expect(result.growthRate).toBe(50); // 1/2 * 100
+  });
+});
+
+describe('identifyChurnedCustomers', () => {
+  const createMockSubscription = (
+    id: string,
+    customerId: string,
+    status: string,
+    canceledDaysAgo?: number
+  ): StripeSubscription => {
+    const now = Math.floor(Date.now() / 1000);
+    const canceledAt = canceledDaysAgo !== undefined 
+      ? now - (canceledDaysAgo * 24 * 60 * 60)
+      : undefined;
+    
+    return {
+      id,
+      status: status as any,
+      customer: customerId,
+      current_period_start: 1640995200,
+      current_period_end: 1643673600,
+      created: 1640995200,
+      cancel_at_period_end: false,
+      canceled_at: canceledAt,
+      trial_start: null,
+      trial_end: null,
+      items: { data: [] },
+    };
+  };
+
+  it('should identify churned customers in period', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const periodStart = now - (30 * 24 * 60 * 60); // 30 days ago
+    const periodEnd = now;
+    
+    const subscriptions = [
+      createMockSubscription('1', 'cus_1', 'canceled', 10), // Churned 10 days ago
+      createMockSubscription('2', 'cus_2', 'canceled', 25), // Churned 25 days ago
+      createMockSubscription('3', 'cus_3', 'canceled', 45), // Churned 45 days ago (outside period)
+      createMockSubscription('4', 'cus_4', 'active'),       // Still active
+    ];
+    
+    const result = identifyChurnedCustomers(subscriptions, periodStart, periodEnd);
+    
+    expect(result.churnedCustomers.size).toBe(2);
+    expect(result.churnedCustomers.has('cus_1')).toBe(true);
+    expect(result.churnedCustomers.has('cus_2')).toBe(true);
+    expect(result.churnedSubscriptions).toHaveLength(2);
+  });
+
+  it('should handle duplicate customers', () => {
+    const now = Math.floor(Date.now() / 1000);
+    const periodStart = now - (30 * 24 * 60 * 60);
+    const periodEnd = now;
+    
+    const subscriptions = [
+      createMockSubscription('1', 'cus_1', 'canceled', 10),
+      createMockSubscription('2', 'cus_1', 'canceled', 15), // Same customer
+    ];
+    
+    const result = identifyChurnedCustomers(subscriptions, periodStart, periodEnd);
+    
+    expect(result.churnedCustomers.size).toBe(1); // Only 1 unique customer
+    expect(result.churnedSubscriptions).toHaveLength(2); // But 2 subscriptions
+  });
+});
+
+describe('calculateChurnRate', () => {
+  it('should calculate churn rate correctly', () => {
+    expect(calculateChurnRate(100, 10)).toBe(10); // 10%
+    expect(calculateChurnRate(50, 5)).toBe(10); // 10%
+    expect(calculateChurnRate(200, 25)).toBe(12.5); // 12.5%
+  });
+
+  it('should handle zero customers at start', () => {
+    expect(calculateChurnRate(0, 0)).toBe(0);
+  });
+
+  it('should round to 2 decimal places', () => {
+    expect(calculateChurnRate(3, 1)).toBe(33.33); // 1/3 = 33.333...
+  });
+});
+
+describe('groupChurnedByReason', () => {
+  const createMockSubscription = (
+    id: string,
+    cancelAtPeriodEnd: boolean
+  ): StripeSubscription => ({
+    id,
+    status: 'canceled',
+    customer: 'cus_1',
+    current_period_start: 1640995200,
+    current_period_end: 1643673600,
+    created: 1640995200,
+    cancel_at_period_end: cancelAtPeriodEnd,
+    canceled_at: Math.floor(Date.now() / 1000),
+    trial_start: null,
+    trial_end: null,
+    items: { data: [] },
+  });
+
+  it('should group churned subscriptions by reason', () => {
+    const subscriptions = [
+      createMockSubscription('1', true),  // scheduled cancellation
+      createMockSubscription('2', true),  // scheduled cancellation
+      createMockSubscription('3', false), // immediate cancellation
+    ];
+    
+    const result = groupChurnedByReason(subscriptions);
+    
+    expect(result).toEqual({
+      scheduled_cancellation: 2,
+      immediate_cancellation: 1,
+    });
+  });
+
+  it('should handle empty array', () => {
+    const result = groupChurnedByReason([]);
+    expect(result).toEqual({});
   });
 });

@@ -50,4 +50,4 @@ Tasks are prioritized: Stripe MCP Integration → Metric Calculation Tools → C
 1. Review PRD requirements in `tasks/prd-*.md`
 2. Follow task list in `tasks/tasks-*.md` in dependency order
 3. Each implementation file should have corresponding `.test.ts` file
-4. Run `pnpm test` to ensure all tests pass before moving to next task
+4. Run `npm run test` to ensure all tests pass before moving to next task

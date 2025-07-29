@@ -182,3 +182,73 @@ export function calculateSubscriptionGrowthMetrics(
     growthRate,
   };
 }
+
+/**
+ * Identifies churned customers in a given period
+ */
+export function identifyChurnedCustomers(
+  subscriptions: StripeSubscription[],
+  periodStartTimestamp: number,
+  periodEndTimestamp: number
+): {
+  churnedCustomers: Set<string>;
+  churnedSubscriptions: StripeSubscription[];
+} {
+  const churnedCustomers = new Set<string>();
+  const churnedSubscriptions: StripeSubscription[] = [];
+  
+  for (const subscription of subscriptions) {
+    // Check if subscription was canceled in the period
+    if (subscription.status === 'canceled' && 
+        subscription.canceled_at && 
+        subscription.canceled_at >= periodStartTimestamp && 
+        subscription.canceled_at <= periodEndTimestamp) {
+      churnedCustomers.add(subscription.customer);
+      churnedSubscriptions.push(subscription);
+    }
+  }
+  
+  return {
+    churnedCustomers,
+    churnedSubscriptions,
+  };
+}
+
+/**
+ * Calculates customer churn rate
+ */
+export function calculateChurnRate(
+  totalCustomersAtStart: number,
+  churnedCustomersCount: number
+): number {
+  if (totalCustomersAtStart === 0) {
+    return 0;
+  }
+  
+  const churnRate = (churnedCustomersCount / totalCustomersAtStart) * 100;
+  return Math.round(churnRate * 100) / 100; // Round to 2 decimal places
+}
+
+/**
+ * Groups churned subscriptions by cancellation reason
+ */
+export function groupChurnedByReason(
+  churnedSubscriptions: StripeSubscription[]
+): Record<string, number> {
+  const reasonCounts: Record<string, number> = {};
+  
+  for (const subscription of churnedSubscriptions) {
+    // Stripe doesn't always provide cancellation reasons, so we'll categorize by status and other factors
+    let reason = 'unknown';
+    
+    if (subscription.cancel_at_period_end) {
+      reason = 'scheduled_cancellation';
+    } else if (subscription.status === 'canceled') {
+      reason = 'immediate_cancellation';
+    }
+    
+    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+  }
+  
+  return reasonCounts;
+}
