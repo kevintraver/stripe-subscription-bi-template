@@ -1,6 +1,7 @@
 import { createWorkflow, createStep } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { stripeMRRTool } from '../tools/stripe-mrr-tool.js';
+import { stripeAgent } from '../agents/stripe-agent.js';
 
 // Input schema for the workflow
 const MRRWorkflowInputSchema = z.object({
@@ -48,20 +49,71 @@ const fetchSubscriptionsStep = createStep({
     includeTrialSubscriptions: z.boolean().describe('Whether trial subscriptions should be included'),
   }),
   
-  execute: async ({ inputData, runtimeContext }) => {
+  execute: async ({ inputData }) => {
     const { includeTrialSubscriptions, currency, limit } = inputData;
     
     try {
       console.log(`Fetching up to ${limit} subscriptions from Stripe...`);
       
-      // For now, we'll expect the subscription data to be provided via runtimeContext
-      // In a real implementation, this step would use Stripe MCP tools through an agent
-      // that has access to the MCP tools and can call them directly
+      // Use Stripe agent to fetch subscription data via MCP tools
+      const query = `Use the stripe_list_subscriptions tool to fetch exactly ${limit} subscriptions from Stripe.
+        Parameters to use:
+        - limit: ${limit}
+        - status: "active"${includeTrialSubscriptions ? ' (include all active subscriptions including trials)' : ''}
+        ${currency ? `- Filter results by currency: ${currency}` : ''}
+        
+        Use the stripe_list_subscriptions tool and return the subscription data exactly as received.`;
       
-      const subscriptions = (runtimeContext as any)?.subscriptions;
+      const response = await stripeAgent.generate([
+        { role: 'user', content: query }
+      ]);
       
-      if (!subscriptions || !Array.isArray(subscriptions)) {
-        throw new Error('No subscription data available. This workflow step expects subscription data to be provided via runtimeContext.subscriptions from Stripe MCP tools.');
+      console.log('Agent response:', JSON.stringify(response, null, 2));
+      
+      // Extract subscription data from agent response
+      // The agent returns the subscription data in the text response as JSON
+      let subscriptions = [];
+      
+      if (response.text) {
+        // Look for JSON array in the response text
+        const jsonMatch = response.text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          try {
+            subscriptions = JSON.parse(jsonMatch[0]);
+            console.log('Successfully parsed subscription data from agent response');
+          } catch (parseError) {
+            console.error('Failed to parse subscription JSON:', parseError);
+          }
+        }
+      }
+      
+      // Fallback: check other possible locations
+      if (subscriptions.length === 0) {
+        if (response.toolResults && Array.isArray(response.toolResults)) {
+          subscriptions = response.toolResults;
+        } else if (response.toolCalls && Array.isArray(response.toolCalls)) {
+          for (const toolCall of response.toolCalls) {
+            if (toolCall.result && toolCall.result.data) {
+              subscriptions = subscriptions.concat(toolCall.result.data);
+            }
+          }
+        } else if (response.steps && Array.isArray(response.steps)) {
+          for (const step of response.steps) {
+            if (step.toolCalls) {
+              for (const toolCall of step.toolCalls) {
+                if (toolCall.result && toolCall.result.data) {
+                  subscriptions = subscriptions.concat(toolCall.result.data);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('Extracted subscriptions:', subscriptions?.length || 0);
+      
+      if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
+        throw new Error(`No subscription data retrieved from Stripe. Agent response: ${JSON.stringify(response)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
       }
 
       console.log(`Successfully fetched ${subscriptions.length} subscriptions from Stripe`);
@@ -75,7 +127,7 @@ const fetchSubscriptionsStep = createStep({
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to fetch subscriptions from Stripe: ${errorMessage}. Ensure STRIPE_SECRET_KEY is configured.`);
+      throw new Error(`Failed to fetch subscriptions from Stripe: ${errorMessage}. Ensure STRIPE_SECRET_KEY is configured and Stripe MCP server is accessible.`);
     }
   },
 });

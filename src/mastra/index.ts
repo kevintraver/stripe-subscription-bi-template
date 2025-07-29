@@ -3,12 +3,13 @@ import { registerApiRoute } from '@mastra/core/server';
 import { PinoLogger } from '@mastra/loggers';
 import { mcpServer } from './mcp/mcp-server';
 import { docsAgent } from './agents/docs-agent';
-import { mcpClient } from './mcp/mcp-client';
+import { stripeAgent } from './agents/stripe-agent';
 import { mrrCalculationWorkflow } from './workflows/mrr-calculation-workflow';
 
 export const mastra = new Mastra({
   agents: {
     docsAgent,
+    stripeAgent,
   },
   workflows: {
     mrrCalculationWorkflow,
@@ -29,7 +30,7 @@ export const mastra = new Mastra({
             timestamp: new Date().toISOString(),
             version: '1.0.0',
             services: {
-              agents: ['docsAgent'],
+              agents: ['docsAgent', 'stripeAgent'],
               workflows: ['mrrCalculationWorkflow'],
               mcp: {
                 servers: ['localTools', 'stripe'],
@@ -66,7 +67,7 @@ export const mastra = new Mastra({
                 authRequired: true,
               },
             },
-            availableAgents: ['docsAgent'],
+            availableAgents: ['docsAgent', 'stripeAgent'],
           });
         },
       }),
