@@ -120,3 +120,65 @@ export function calculateARPU(totalMRR: number, customerCount: number): number {
   
   return Math.round((totalMRR / customerCount) * 100) / 100; // Round to 2 decimal places
 }
+
+/**
+ * Groups subscriptions by status and counts them
+ */
+export function groupSubscriptionsByStatus(subscriptions: StripeSubscription[]): Record<string, number> {
+  const statusCounts: Record<string, number> = {};
+  
+  for (const subscription of subscriptions) {
+    const status = subscription.status;
+    statusCounts[status] = (statusCounts[status] || 0) + 1;
+  }
+  
+  return statusCounts;
+}
+
+/**
+ * Counts active subscriptions based on criteria
+ */
+export function countActiveSubscriptions(
+  subscriptions: StripeSubscription[],
+  includeTrialSubscriptions: boolean = false
+): number {
+  return subscriptions.filter(sub => 
+    isSubscriptionActiveForMRR(sub, includeTrialSubscriptions)
+  ).length;
+}
+
+/**
+ * Gets subscription growth metrics
+ */
+export function calculateSubscriptionGrowthMetrics(
+  subscriptions: StripeSubscription[],
+  daysBack: number = 30
+): {
+  newSubscriptions: number;
+  existingSubscriptions: number;
+  growthRate: number;
+} {
+  const cutoffTimestamp = Math.floor(Date.now() / 1000) - (daysBack * 24 * 60 * 60);
+  
+  let newSubscriptions = 0;
+  let existingSubscriptions = 0;
+  
+  for (const subscription of subscriptions) {
+    if (subscription.created >= cutoffTimestamp) {
+      newSubscriptions++;
+    } else {
+      existingSubscriptions++;
+    }
+  }
+  
+  const previousTotal = existingSubscriptions;
+  const growthRate = previousTotal > 0 
+    ? Math.round(((newSubscriptions / previousTotal) * 100) * 100) / 100 
+    : 0;
+  
+  return {
+    newSubscriptions,
+    existingSubscriptions,
+    growthRate,
+  };
+}

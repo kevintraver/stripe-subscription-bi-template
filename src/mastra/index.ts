@@ -6,6 +6,7 @@ import { docsAgent } from './agents/docs-agent';
 import { stripeAgent } from './agents/stripe-agent';
 import { mrrCalculationWorkflow } from './workflows/mrr-calculation-workflow';
 import { arpuCalculationWorkflow } from './workflows/arpu-calculation-workflow';
+import { activeSubscribersWorkflow } from './workflows/active-subscribers-workflow';
 
 export const mastra = new Mastra({
   agents: {
@@ -15,6 +16,7 @@ export const mastra = new Mastra({
   workflows: {
     mrrCalculationWorkflow,
     arpuCalculationWorkflow,
+    activeSubscribersWorkflow,
   },
   mcpServers: {
     kepler: mcpServer,
@@ -33,7 +35,7 @@ export const mastra = new Mastra({
             version: '1.0.0',
             services: {
               agents: ['docsAgent', 'stripeAgent'],
-              workflows: ['mrrCalculationWorkflow', 'arpuCalculationWorkflow'],
+              workflows: ['mrrCalculationWorkflow', 'arpuCalculationWorkflow', 'activeSubscribersWorkflow'],
               mcp: {
                 servers: ['localTools', 'stripe'],
                 status: 'configured',

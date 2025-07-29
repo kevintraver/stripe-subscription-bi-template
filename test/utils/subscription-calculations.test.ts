@@ -6,6 +6,9 @@ import {
   getBillingIntervalDescription,
   calculateUniqueCustomerCount,
   calculateARPU,
+  groupSubscriptionsByStatus,
+  countActiveSubscriptions,
+  calculateSubscriptionGrowthMetrics,
 } from '../../src/utils/subscription-calculations.js';
 import type { StripeSubscription } from '../../src/types/subscription-types.js';
 
@@ -321,5 +324,150 @@ describe('calculateARPU', () => {
     const customerCount = 5;
     
     expect(calculateARPU(totalMRR, customerCount)).toBe(0);
+  });
+});
+
+describe('groupSubscriptionsByStatus', () => {
+  const createMockSubscription = (status: string): StripeSubscription => ({
+    id: `sub_${status}`,
+    status: status as any,
+    customer: 'cus_1',
+    current_period_start: 1640995200,
+    current_period_end: 1643673600,
+    created: 1640995200,
+    cancel_at_period_end: false,
+    trial_start: null,
+    trial_end: null,
+    items: { data: [] },
+  });
+
+  it('should group subscriptions by status correctly', () => {
+    const subscriptions = [
+      createMockSubscription('active'),
+      createMockSubscription('active'),
+      createMockSubscription('trialing'),
+      createMockSubscription('past_due'),
+      createMockSubscription('canceled'),
+    ];
+    
+    const result = groupSubscriptionsByStatus(subscriptions);
+    
+    expect(result).toEqual({
+      active: 2,
+      trialing: 1,
+      past_due: 1,
+      canceled: 1,
+    });
+  });
+
+  it('should handle empty subscription array', () => {
+    const result = groupSubscriptionsByStatus([]);
+    expect(result).toEqual({});
+  });
+});
+
+describe('countActiveSubscriptions', () => {
+  const createMockSubscription = (status: string): StripeSubscription => ({
+    id: `sub_${status}`,
+    status: status as any,
+    customer: 'cus_1',
+    current_period_start: 1640995200,
+    current_period_end: 1643673600,
+    created: 1640995200,
+    cancel_at_period_end: false,
+    trial_start: null,
+    trial_end: null,
+    items: { data: [] },
+  });
+
+  it('should count active subscriptions correctly', () => {
+    const subscriptions = [
+      createMockSubscription('active'),
+      createMockSubscription('active'),
+      createMockSubscription('past_due'),
+      createMockSubscription('canceled'),
+    ];
+    
+    expect(countActiveSubscriptions(subscriptions)).toBe(3); // active + past_due
+  });
+
+  it('should exclude trial subscriptions by default', () => {
+    const subscriptions = [
+      createMockSubscription('active'),
+      createMockSubscription('trialing'),
+    ];
+    
+    expect(countActiveSubscriptions(subscriptions)).toBe(1);
+  });
+
+  it('should include trial subscriptions when flag is true', () => {
+    const subscriptions = [
+      createMockSubscription('active'),
+      createMockSubscription('trialing'),
+    ];
+    
+    expect(countActiveSubscriptions(subscriptions, true)).toBe(2);
+  });
+});
+
+describe('calculateSubscriptionGrowthMetrics', () => {
+  const createMockSubscription = (daysAgo: number): StripeSubscription => {
+    const createdTimestamp = Math.floor(Date.now() / 1000) - (daysAgo * 24 * 60 * 60);
+    
+    return {
+      id: `sub_${daysAgo}`,
+      status: 'active',
+      customer: 'cus_1',
+      current_period_start: createdTimestamp,
+      current_period_end: createdTimestamp + (30 * 24 * 60 * 60),
+      created: createdTimestamp,
+      cancel_at_period_end: false,
+      trial_start: null,
+      trial_end: null,
+      items: { data: [] },
+    };
+  };
+
+  it('should calculate growth metrics correctly', () => {
+    const subscriptions = [
+      createMockSubscription(5),   // New (within 30 days)
+      createMockSubscription(15),  // New (within 30 days)
+      createMockSubscription(45),  // Existing
+      createMockSubscription(60),  // Existing
+      createMockSubscription(90),  // Existing
+    ];
+    
+    const result = calculateSubscriptionGrowthMetrics(subscriptions, 30);
+    
+    expect(result.newSubscriptions).toBe(2);
+    expect(result.existingSubscriptions).toBe(3);
+    expect(result.growthRate).toBe(66.67); // 2/3 * 100
+  });
+
+  it('should handle zero existing subscriptions', () => {
+    const subscriptions = [
+      createMockSubscription(5),
+      createMockSubscription(10),
+    ];
+    
+    const result = calculateSubscriptionGrowthMetrics(subscriptions, 30);
+    
+    expect(result.newSubscriptions).toBe(2);
+    expect(result.existingSubscriptions).toBe(0);
+    expect(result.growthRate).toBe(0); // No previous subscriptions to calculate growth
+  });
+
+  it('should handle custom period days', () => {
+    const subscriptions = [
+      createMockSubscription(3),   // New (within 7 days)
+      createMockSubscription(10),  // Existing (older than 7 days)
+      createMockSubscription(20),  // Existing
+    ];
+    
+    const result = calculateSubscriptionGrowthMetrics(subscriptions, 7);
+    
+    expect(result.newSubscriptions).toBe(1);
+    expect(result.existingSubscriptions).toBe(2);
+    expect(result.growthRate).toBe(50); // 1/2 * 100
   });
 });
