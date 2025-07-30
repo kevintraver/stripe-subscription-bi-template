@@ -10,6 +10,7 @@ import { activeSubscribersWorkflow } from './workflows/active-subscribers-workfl
 import { churnRateWorkflow } from './workflows/churn-rate-workflow'
 import { ltvCalculationWorkflow } from './workflows/ltv-calculation-workflow'
 import { mrrExpansionWorkflow } from './workflows/mrr-expansion-workflow'
+import { ltvCalculationWorkflow } from './workflows/ltv-calculation-workflow';
 
 export const mastra = new Mastra({
   agents: {
@@ -21,7 +22,8 @@ export const mastra = new Mastra({
     arpuCalculationWorkflow,
     activeSubscribersWorkflow,
     churnRateWorkflow,
-    mrrExpansionWorkflow
+    mrrExpansionWorkflow,
+    ltvCalculationWorkflow
   },
   mcpServers: {
     kepler: mcpServer
@@ -46,6 +48,7 @@ export const mastra = new Mastra({
                 'activeSubscribersWorkflow',
                 'churnRateWorkflow',
                 'mrrExpansionWorkflow'
+                'ltvCalculationWorkflow'
               ],
               mcp: {
                 servers: ['localTools', 'stripe'],
