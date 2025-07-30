@@ -10,7 +10,6 @@ import { activeSubscribersWorkflow } from './workflows/active-subscribers-workfl
 import { churnRateWorkflow } from './workflows/churn-rate-workflow'
 import { ltvCalculationWorkflow } from './workflows/ltv-calculation-workflow'
 import { mrrExpansionWorkflow } from './workflows/mrr-expansion-workflow'
-import { ltvCalculationWorkflow } from './workflows/ltv-calculation-workflow';
 
 export const mastra = new Mastra({
   agents: {
