@@ -47,7 +47,7 @@ export const mastra = new Mastra({
                 'arpuCalculationWorkflow',
                 'activeSubscribersWorkflow',
                 'churnRateWorkflow',
-                'mrrExpansionWorkflow'
+                'mrrExpansionWorkflow',
                 'ltvCalculationWorkflow'
               ],
               mcp: {
