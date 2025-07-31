@@ -26,6 +26,6 @@ IMPORTANT: When fetching subscriptions, use the stripe_list_subscriptions tool w
 
 Always use the stripe_list_subscriptions tool and return the subscription data exactly as provided by Stripe.`,
 
-  model: openai('gpt-4o'),
+  model: openai('gpt-4.1'),
   tools: await mcpClient.getTools(),
 });
