@@ -93,16 +93,20 @@ const fetchSubscriptionsStep = createStep({
           subscriptions = response.toolResults;
         } else if (response.toolCalls && Array.isArray(response.toolCalls)) {
           for (const toolCall of response.toolCalls) {
-            if (toolCall.result && toolCall.result.data) {
-              subscriptions = subscriptions.concat(toolCall.result.data);
+            // Use type assertion to access result property that exists at runtime
+            const toolCallWithResult = toolCall as any;
+            if (toolCallWithResult.result && toolCallWithResult.result.data) {
+              subscriptions = subscriptions.concat(toolCallWithResult.result.data);
             }
           }
         } else if (response.steps && Array.isArray(response.steps)) {
           for (const step of response.steps) {
             if (step.toolCalls) {
               for (const toolCall of step.toolCalls) {
-                if (toolCall.result && toolCall.result.data) {
-                  subscriptions = subscriptions.concat(toolCall.result.data);
+                // Use type assertion to access result property that exists at runtime
+                const toolCallWithResult = toolCall as any;
+                if (toolCallWithResult.result && toolCallWithResult.result.data) {
+                  subscriptions = subscriptions.concat(toolCallWithResult.result.data);
                 }
               }
             }
