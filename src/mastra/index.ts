@@ -1,6 +1,7 @@
 import { Mastra } from '@mastra/core/mastra'
 import { registerApiRoute } from '@mastra/core/server'
 import { PinoLogger } from '@mastra/loggers'
+import { LibSQLStore } from '@mastra/libsql'
 import { mcpServer } from './mcp/mcp-server'
 import { docsAgent } from './agents/docs-agent'
 import { stripeAgent } from './agents/stripe-agent'
@@ -27,6 +28,9 @@ export const mastra = new Mastra({
   mcpServers: {
     kepler: mcpServer
   },
+  storage: new LibSQLStore({
+    url: process.env.DATABASE_URL || 'file:./mastra.db'
+  }),
   server: {
     port: parseInt(process.env.PORT || '4112', 10),
     timeout: 30000,
