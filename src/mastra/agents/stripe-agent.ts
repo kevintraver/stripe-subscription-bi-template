@@ -4,6 +4,7 @@ import { mcpClient } from '../mcp/mcp-client.js'
 import { activeSubscribersWorkflow } from '../workflows/active-subscribers-workflow.js'
 import { mrrCalculationWorkflow } from '../workflows/mrr-calculation-workflow.js'
 import { arpuCalculationWorkflow } from '../workflows/arpu-calculation-workflow.js'
+import { churnRateWorkflow } from '../workflows/churn-rate-workflow.js'
 
 export const stripeAgent = new Agent({
   name: 'stripe-subscription-agent',
@@ -17,5 +18,6 @@ export const stripeAgent = new Agent({
     activeSubscribersWorkflow,
     mrrCalculationWorkflow,
     arpuCalculationWorkflow,
+    churnRateWorkflow,
   }
 })

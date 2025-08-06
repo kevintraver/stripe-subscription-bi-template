@@ -1,7 +1,7 @@
 import { createWorkflow, createStep } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { stripeChurnRateTool } from '../tools/stripe-churn-rate-tool.js';
-import { stripeAgent } from '../agents/stripe-agent.js';
+import { mcpClient } from '../mcp/mcp-client.js';
 
 // Input schema for the workflow
 const ChurnRateWorkflowInputSchema = z.object({
@@ -21,8 +21,8 @@ const ChurnRateWorkflowInputSchema = z.object({
     .describe('Maximum number of subscriptions to fetch from Stripe'),
 });
 
-// Output schema for the workflow
-const ChurnRateWorkflowOutputSchema = z.object({
+// Output schema for the raw analysis (without explanation)
+const RawChurnAnalysisSchema = z.object({
   churnRate: z.number().describe('Customer churn rate as a percentage'),
   churnedCustomersCount: z.number().describe('Number of unique customers who churned'),
   totalCustomersAtStart: z.number().describe('Total unique customers at the start of the period'),
@@ -50,14 +50,22 @@ const ChurnRateWorkflowOutputSchema = z.object({
   }),
   retentionRate: z.number().describe('Customer retention rate (100 - churn rate)'),
   calculatedAt: z.string().describe('ISO timestamp when calculation was performed'),
-  explanation: z.string().describe('Human-readable explanation of the calculation'),
+  filters: z.object({
+    periodDays: z.number(),
+    currency: z.string().optional(),
+  }),
   subscriptionsFetched: z.number().describe('Total number of subscriptions fetched from Stripe'),
 });
 
-// Step 1: Fetch subscriptions from Stripe MCP server
+// Final output schema for the workflow (with human-readable explanation)
+const ChurnRateWorkflowOutputSchema = RawChurnAnalysisSchema.extend({
+  explanation: z.string().describe('Human-readable explanation of the calculation'),
+});
+
+// Step 1: Fetch subscriptions directly from Stripe MCP server
 const fetchSubscriptionsStep = createStep({
   id: 'fetch-subscriptions',
-  description: 'Fetch subscription data from Stripe using MCP server',
+  description: 'Fetch subscription data directly from Stripe using MCP tools',
   inputSchema: ChurnRateWorkflowInputSchema,
   outputSchema: z.object({
     subscriptions: z.array(z.any()).describe('Array of Stripe subscription objects'),
@@ -72,74 +80,72 @@ const fetchSubscriptionsStep = createStep({
     try {
       console.log(`Fetching up to ${limit} subscriptions from Stripe for churn rate analysis...`);
       
+      // Get available tools from MCP client
+      const tools = await mcpClient.getTools();
+      console.log('Available MCP tools:', Object.keys(tools || {}));
+      
+      if (!tools || !tools['stripe_list_subscriptions']) {
+        console.error('Available tools:', Object.keys(tools || {}));
+        throw new Error('stripe_list_subscriptions tool not available. Ensure Stripe MCP server is configured with STRIPE_SECRET_KEY.');
+      }
+
       // Calculate the date range for fetching subscriptions
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - (periodDays + 90)); // Fetch extra to ensure we capture all relevant data
+
+      // Build parameters for the Stripe API call
+      const params: any = {
+        limit: limit,
+        created: { gte: Math.floor(startDate.getTime() / 1000) }, // Include historical data for churn analysis
+      };
+
+      // Add currency filter if specified
+      if (currency) {
+        params.currency = currency;
+      }
+
+      // Call stripe_list_subscriptions tool via tools
+      console.log('Calling stripe_list_subscriptions with params:', params);
+      const stripeTool = tools['stripe_list_subscriptions'];
+      const result = await stripeTool.execute({ context: params });
       
-      // Use Stripe agent to fetch subscription data via MCP tools
-      const query = `Use the stripe_list_subscriptions tool to fetch exactly ${limit} subscriptions from Stripe.
-        Parameters to use:
-        - limit: ${limit}
-        - Include all subscription statuses (active, canceled, past_due, etc.)
-        - created: { gte: ${Math.floor(startDate.getTime() / 1000)} }
-        ${currency ? `- Filter results by currency: ${currency}` : ''}
-        
-        Use the stripe_list_subscriptions tool and return the subscription data exactly as received, including canceled subscriptions.`;
-      
-      const response = await stripeAgent.generate([
-        { role: 'user', content: query }
-      ]);
-      
-      console.log('Agent response:', JSON.stringify(response, null, 2));
-      
-      // Extract subscription data from agent response
+      console.log('Stripe MCP tool result:', JSON.stringify(result, null, 2));
+
+      // Extract subscriptions from the MCP result
       let subscriptions = [];
       
-      if (response.text) {
-        // Look for JSON array in the response text
-        const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            subscriptions = JSON.parse(jsonMatch[0]);
-            console.log('Successfully parsed subscription data from agent response');
-          } catch (parseError) {
-            console.error('Failed to parse subscription JSON:', parseError);
-          }
-        }
-      }
-      
-      // Fallback: check other possible locations
-      if (subscriptions.length === 0) {
-        if (response.toolResults && Array.isArray(response.toolResults)) {
-          subscriptions = response.toolResults;
-        } else if (response.toolCalls && Array.isArray(response.toolCalls)) {
-          for (const toolCall of response.toolCalls) {
-            // Use type assertion to access result property that exists at runtime
-            const toolCallWithResult = toolCall as any;
-            if (toolCallWithResult.result && toolCallWithResult.result.data) {
-              subscriptions = subscriptions.concat(toolCallWithResult.result.data);
-            }
-          }
-        } else if (response.steps && Array.isArray(response.steps)) {
-          for (const step of response.steps) {
-            if (step.toolCalls) {
-              for (const toolCall of step.toolCalls) {
-                // Use type assertion to access result property that exists at runtime
-                const toolCallWithResult = toolCall as any;
-                if (toolCallWithResult.result && toolCallWithResult.result.data) {
-                  subscriptions = subscriptions.concat(toolCallWithResult.result.data);
-                }
+      // Handle MCP response format with content array
+      if (result?.content && Array.isArray(result.content)) {
+        for (const contentItem of result.content) {
+          if (contentItem.type === 'text' && contentItem.text) {
+            try {
+              // Parse the JSON string from the text content
+              const parsedData = JSON.parse(contentItem.text);
+              if (Array.isArray(parsedData)) {
+                subscriptions = parsedData;
+                break;
               }
+            } catch (parseError) {
+              console.warn('Failed to parse MCP content as JSON:', parseError);
             }
           }
         }
       }
       
-      console.log('Extracted subscriptions:', subscriptions?.length || 0);
-      
+      // Fallback to other possible formats
+      if (subscriptions.length === 0) {
+        if (result?.data?.data && Array.isArray(result.data.data)) {
+          subscriptions = result.data.data;
+        } else if (result?.data && Array.isArray(result.data)) {
+          subscriptions = result.data;
+        } else if (Array.isArray(result)) {
+          subscriptions = result;
+        }
+      }
+
       if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
-        throw new Error(`No subscription data retrieved from Stripe. Agent response: ${JSON.stringify(response)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
+        throw new Error(`No subscription data retrieved from Stripe. MCP result: ${JSON.stringify(result)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
       }
 
       console.log(`Successfully fetched ${subscriptions.length} subscriptions from Stripe`);
@@ -158,7 +164,7 @@ const fetchSubscriptionsStep = createStep({
   },
 });
 
-// Step 2: Calculate churn rate using our calculation tool
+// Step 2: Calculate churn rate using our calculation tool (raw data only)
 const calculateChurnRateStep = createStep({
   id: 'calculate-churn-rate',
   description: 'Calculate customer churn rate from fetched subscription data',
@@ -168,7 +174,7 @@ const calculateChurnRateStep = createStep({
     currency: z.string().optional().describe('Currency filter applied'),
     periodDays: z.number().describe('Period for churn analysis'),
   }),
-  outputSchema: ChurnRateWorkflowOutputSchema,
+  outputSchema: RawChurnAnalysisSchema,
 
   execute: async ({ inputData }) => {
     const { subscriptions, totalFetched, currency, periodDays } = inputData;
@@ -188,8 +194,15 @@ const calculateChurnRateStep = createStep({
 
       console.log(`Churn rate calculation complete: ${churnResult.churnRate}% (${churnResult.churnedCustomersCount} churned out of ${churnResult.totalCustomersAtStart} customers)`);
 
+      // Return raw analysis data without explanation
+      const { explanation: _, ...rawAnalysis } = churnResult;
+
       return {
-        ...churnResult,
+        ...rawAnalysis,
+        filters: {
+          periodDays,
+          currency,
+        },
         subscriptionsFetched: totalFetched,
       };
 
@@ -200,14 +213,98 @@ const calculateChurnRateStep = createStep({
   },
 });
 
+// Step 3: Generate human-readable explanation using agent
+const generateExplanationStep: any = createStep({
+  id: 'generate-explanation',
+  description: 'Generate human-readable explanation of the churn rate analysis',
+  inputSchema: RawChurnAnalysisSchema,
+  outputSchema: ChurnRateWorkflowOutputSchema,
+
+  execute: async ({ inputData }): Promise<any> => {
+    try {
+      console.log('Generating human-readable explanation for churn rate analysis...');
+
+      // Create a summary of the raw analysis data
+      const analysisData = inputData;
+      const summary = `
+Customer Churn Rate Analysis Results:
+- Churn Rate: ${analysisData.churnRate}%
+- Retention Rate: ${analysisData.retentionRate}%
+- Analysis Period: ${analysisData.period.days} days (${new Date(analysisData.period.startDate).toLocaleDateString()} to ${new Date(analysisData.period.endDate).toLocaleDateString()})
+
+Customer Metrics:
+- Total Customers at Start: ${analysisData.totalCustomersAtStart}
+- Churned Customers: ${analysisData.churnedCustomersCount}
+- New Customers Acquired: ${analysisData.newCustomersInPeriod}
+- New Customers Who Churned: ${analysisData.churnedNewCustomers}
+
+Subscription Metrics:
+- Total Churned Subscriptions: ${analysisData.churnedSubscriptionsCount}
+- Subscriptions Fetched: ${analysisData.subscriptionsFetched}
+
+Churn Breakdown by Reason:
+${Object.entries(analysisData.reasonBreakdown).map(([reason, count]) => `- ${reason}: ${count} subscriptions`).join('\n')}
+
+Churn Breakdown by Plan:
+${analysisData.planBreakdown.slice(0, 5).map(plan => `- ${plan.planName || plan.planId} (${plan.interval}): ${plan.churnedCount} subscriptions`).join('\n')}
+${analysisData.planBreakdown.length > 5 ? `... and ${analysisData.planBreakdown.length - 5} more plans` : ''}
+
+Filters Applied: ${JSON.stringify(analysisData.filters)}
+Calculated At: ${analysisData.calculatedAt}
+      `;
+
+      // Get the stripe agent from MCP client  
+      const agent: any = await import('../agents/stripe-agent.js').then(m => m.stripeAgent);
+      
+      // Use the agent to generate a human-readable explanation
+      const response: any = await agent.generate([
+        { 
+          role: 'user', 
+          content: `Please provide a clear, business-friendly explanation of this customer churn rate analysis. Focus on key insights and trends that would be valuable for business decision-making:
+
+${summary}
+
+Generate a concise but comprehensive explanation that covers:
+1. Overall customer retention health and what the churn rate indicates about the business
+2. Analysis of customer acquisition vs retention patterns
+3. Insights from churn reasons and their business implications
+4. Plan-specific churn patterns and what they reveal about product-market fit
+5. Strategic recommendations for reducing churn and improving retention
+6. Early warning indicators and proactive measures based on the data`
+        }
+      ]);
+
+      const explanation: string = response.text || 'Churn rate analysis completed successfully.';
+      
+      console.log('Generated explanation for churn rate analysis');
+
+      return {
+        ...analysisData,
+        explanation,
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`Failed to generate explanation: ${errorMessage}. Using default explanation.`);
+      
+      // Return with a basic explanation if agent fails
+      return {
+        ...inputData,
+        explanation: `Churn rate analysis completed. Customer churn rate is ${inputData.churnRate}% over ${inputData.period.days} days, with ${inputData.churnedCustomersCount} customers churning out of ${inputData.totalCustomersAtStart} total customers at period start. Retention rate: ${inputData.retentionRate}%.`,
+      };
+    }
+  },
+});
+
 // Create the churn rate calculation workflow
-export const churnRateWorkflow = createWorkflow({
+export const churnRateWorkflow: any = createWorkflow({
   id: 'churn-rate-workflow',
-  description: 'Fetch Stripe subscription data and calculate customer churn rate over a specified period',
+  description: 'Fetch Stripe subscription data, calculate customer churn rate over a specified period, and generate human-readable insights',
   inputSchema: ChurnRateWorkflowInputSchema,
   outputSchema: ChurnRateWorkflowOutputSchema,
-  steps: [fetchSubscriptionsStep, calculateChurnRateStep],
+  steps: [fetchSubscriptionsStep, calculateChurnRateStep, generateExplanationStep],
 })
   .then(fetchSubscriptionsStep)
   .then(calculateChurnRateStep)
+  .then(generateExplanationStep)
   .commit();
