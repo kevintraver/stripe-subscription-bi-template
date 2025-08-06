@@ -26,9 +26,9 @@ The primary problem this solves is the need for non-technical business stakehold
 
 ### Core Metric Calculations (Priority Order)
 
-1. **The system must calculate Monthly Recurring Revenue (MRR)** by summing all active subscription amounts and normalizing non-monthly billing periods to monthly values.
-2. **The system must count Active Subscribers** by identifying unique customers with at least one active subscription status.
-3. **The system must calculate Average Revenue Per User (ARPU)** by dividing current MRR by the number of active subscribers.
+1. DONE **The system must calculate Monthly Recurring Revenue (MRR)** by summing all active subscription amounts and normalizing non-monthly billing periods to monthly values.
+2. DONE **The system must count Active Subscribers** by identifying unique customers with at least one active subscription status.
+3. DONE **The system must calculate Average Revenue Per User (ARPU)** by dividing current MRR by the number of active subscribers.
 4. **The system must calculate Customer Churn Rate** by determining the percentage of customers who canceled subscriptions in the current month.
 5. **The system must calculate Revenue Churn Rate** by measuring MRR lost to cancellations as a percentage of starting period MRR.
 6. **The system must calculate Customer Lifetime Value (LTV)** using the formula: ARPU ÷ Churn Rate.
