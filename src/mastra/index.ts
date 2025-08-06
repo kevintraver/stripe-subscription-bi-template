@@ -3,7 +3,6 @@ import { registerApiRoute } from '@mastra/core/server'
 import { PinoLogger } from '@mastra/loggers'
 import { LibSQLStore } from '@mastra/libsql'
 import { mcpServer } from './mcp/mcp-server'
-import { docsAgent } from './agents/docs-agent'
 import { stripeAgent } from './agents/stripe-agent'
 import { mrrCalculationWorkflow } from './workflows/mrr-calculation-workflow'
 import { arpuCalculationWorkflow } from './workflows/arpu-calculation-workflow'
@@ -14,7 +13,6 @@ import { mrrExpansionWorkflow } from './workflows/mrr-expansion-workflow'
 
 export const mastra = new Mastra({
   agents: {
-    docsAgent,
     stripeAgent
   },
   workflows: {

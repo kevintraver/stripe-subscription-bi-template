@@ -205,13 +205,13 @@ const analyzeActiveSubscribersStep = createStep({
 });
 
 // Step 3: Generate human-readable explanation using agent
-const generateExplanationStep = createStep({
+const generateExplanationStep: any = createStep({
   id: 'generate-explanation',
   description: 'Generate human-readable explanation of the active subscribers analysis',
   inputSchema: RawAnalysisOutputSchema,
   outputSchema: ActiveSubscribersWorkflowOutputSchema,
 
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData }): Promise<any> => {
     try {
       console.log('Generating human-readable explanation for active subscribers analysis...');
 
@@ -231,10 +231,10 @@ Active Subscribers Analysis Results:
       `;
 
       // Get the stripe agent from MCP client  
-      const agent = await import('../agents/stripe-agent.js').then(m => m.stripeAgent);
+      const agent: any = await import('../agents/stripe-agent.js').then(m => m.stripeAgent);
       
       // Use the agent to generate a human-readable explanation
-      const response = await agent.generate([
+      const response: any = await agent.generate([
         { 
           role: 'user', 
           content: `Please provide a clear, business-friendly explanation of this active subscribers analysis. Focus on key insights and trends that would be valuable for business decision-making:
@@ -250,7 +250,7 @@ Generate a concise but comprehensive explanation that covers:
         }
       ]);
 
-      const explanation = response.text || 'Analysis completed successfully.';
+      const explanation: string = response.text || 'Analysis completed successfully.';
       
       console.log('Generated explanation for active subscribers analysis');
 
@@ -273,7 +273,7 @@ Generate a concise but comprehensive explanation that covers:
 });
 
 // Create the active subscribers workflow
-export const activeSubscribersWorkflow = createWorkflow({
+export const activeSubscribersWorkflow: any = createWorkflow({
   id: 'active-subscribers-workflow',
   description: 'Fetch Stripe subscription data, analyze active subscriber metrics, and generate human-readable insights',
   inputSchema: ActiveSubscribersWorkflowInputSchema,

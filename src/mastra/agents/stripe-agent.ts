@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent'
 import { openai } from '@ai-sdk/openai'
 import { mcpClient } from '../mcp/mcp-client.js'
 import { activeSubscribersWorkflow } from '../workflows/active-subscribers-workflow.js'
+import { mrrCalculationWorkflow } from '../workflows/mrr-calculation-workflow.js'
 
 export const stripeAgent = new Agent({
   name: 'stripe-subscription-agent',
@@ -12,6 +13,7 @@ export const stripeAgent = new Agent({
   model: openai('gpt-4o-mini'), // Faster and cheaper than gpt-4.1
   tools: await mcpClient.getTools(),
   workflows: {
-    activeSubscribersWorkflow
+    activeSubscribersWorkflow,
+    mrrCalculationWorkflow,
   }
 })
