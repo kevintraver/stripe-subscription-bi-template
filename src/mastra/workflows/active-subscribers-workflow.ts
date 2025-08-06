@@ -1,7 +1,7 @@
 import { createWorkflow, createStep } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { stripeActiveSubscribersTool } from '../tools/stripe-active-subscribers-tool.js';
-import { stripeAgent } from '../agents/stripe-agent.js';
+import { mcpClient } from '../mcp/mcp-client.js';
 
 // Input schema for the workflow
 const ActiveSubscribersWorkflowInputSchema = z.object({
@@ -26,8 +26,8 @@ const ActiveSubscribersWorkflowInputSchema = z.object({
     .describe('Maximum number of subscriptions to fetch from Stripe'),
 });
 
-// Output schema for the workflow
-const ActiveSubscribersWorkflowOutputSchema = z.object({
+// Output schema for the raw analysis (without explanation)
+const RawAnalysisOutputSchema = z.object({
   totalActiveSubscriptions: z.number().describe('Total number of active subscriptions'),
   uniqueActiveCustomers: z.number().describe('Number of unique active customers'),
   statusBreakdown: z
@@ -51,14 +51,18 @@ const ActiveSubscribersWorkflowOutputSchema = z.object({
     currency: z.string().optional(),
   }),
   calculatedAt: z.string().describe('ISO timestamp when calculation was performed'),
-  explanation: z.string().describe('Human-readable explanation of the analysis'),
   subscriptionsFetched: z.number().describe('Total number of subscriptions fetched from Stripe'),
 });
 
-// Step 1: Fetch subscriptions from Stripe MCP server (reused pattern)
+// Final output schema for the workflow (with human-readable explanation)
+const ActiveSubscribersWorkflowOutputSchema = RawAnalysisOutputSchema.extend({
+  explanation: z.string().describe('Human-readable explanation of the analysis'),
+});
+
+// Step 1: Fetch subscriptions directly from Stripe MCP server
 const fetchSubscriptionsStep = createStep({
   id: 'fetch-subscriptions',
-  description: 'Fetch subscription data from Stripe using MCP server',
+  description: 'Fetch subscription data directly from Stripe using MCP tools',
   inputSchema: ActiveSubscribersWorkflowInputSchema,
   outputSchema: z.object({
     subscriptions: z.array(z.any()).describe('Array of Stripe subscription objects'),
@@ -74,68 +78,66 @@ const fetchSubscriptionsStep = createStep({
     try {
       console.log(`Fetching up to ${limit} subscriptions from Stripe for active subscribers analysis...`);
       
-      // Use Stripe agent to fetch subscription data via MCP tools
-      const query = `Use the stripe_list_subscriptions tool to fetch exactly ${limit} subscriptions from Stripe.
-        Parameters to use:
-        - limit: ${limit}
-        - Include all subscription statuses (active, trialing, past_due, canceled, etc.)
-        ${currency ? `- Filter results by currency: ${currency}` : ''}
-        
-        Use the stripe_list_subscriptions tool and return the subscription data exactly as received.`;
+      // Get available tools from MCP client
+      const tools = await mcpClient.getTools();
+      console.log('Available MCP tools:', Object.keys(tools || {}));
       
-      const response = await stripeAgent.generate([
-        { role: 'user', content: query }
-      ]);
+      if (!tools || !tools['stripe_list_subscriptions']) {
+        console.error('Available tools:', Object.keys(tools || {}));
+        throw new Error('stripe_list_subscriptions tool not available. Ensure Stripe MCP server is configured with STRIPE_SECRET_KEY.');
+      }
+
+      // Build parameters for the Stripe API call
+      const params: any = {
+        limit: limit,
+      };
+
+      // Add currency filter if specified
+      if (currency) {
+        params.currency = currency;
+      }
+
+      // Call stripe_list_subscriptions tool via tools
+      console.log('Calling stripe_list_subscriptions with params:', params);
+      const stripeTool = tools['stripe_list_subscriptions'];
+      const result = await stripeTool.execute({ context: params });
       
-      console.log('Agent response:', JSON.stringify(response, null, 2));
-      
-      // Extract subscription data from agent response
+      console.log('Stripe MCP tool result:', JSON.stringify(result, null, 2));
+
+      // Extract subscriptions from the MCP result
       let subscriptions = [];
       
-      if (response.text) {
-        // Look for JSON array in the response text
-        const jsonMatch = response.text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            subscriptions = JSON.parse(jsonMatch[0]);
-            console.log('Successfully parsed subscription data from agent response');
-          } catch (parseError) {
-            console.error('Failed to parse subscription JSON:', parseError);
-          }
-        }
-      }
-      
-      // Fallback: check other possible locations
-      if (subscriptions.length === 0) {
-        if (response.toolResults && Array.isArray(response.toolResults)) {
-          subscriptions = response.toolResults;
-        } else if (response.toolCalls && Array.isArray(response.toolCalls)) {
-          for (const toolCall of response.toolCalls) {
-            // Use type assertion to access result property that exists at runtime
-            const toolCallWithResult = toolCall as any;
-            if (toolCallWithResult.result && toolCallWithResult.result.data) {
-              subscriptions = subscriptions.concat(toolCallWithResult.result.data);
-            }
-          }
-        } else if (response.steps && Array.isArray(response.steps)) {
-          for (const step of response.steps) {
-            if (step.toolCalls) {
-              for (const toolCall of step.toolCalls) {
-                // Use type assertion to access result property that exists at runtime
-                const toolCallWithResult = toolCall as any;
-                if (toolCallWithResult.result && toolCallWithResult.result.data) {
-                  subscriptions = subscriptions.concat(toolCallWithResult.result.data);
-                }
+      // Handle MCP response format with content array
+      if (result?.content && Array.isArray(result.content)) {
+        for (const contentItem of result.content) {
+          if (contentItem.type === 'text' && contentItem.text) {
+            try {
+              // Parse the JSON string from the text content
+              const parsedData = JSON.parse(contentItem.text);
+              if (Array.isArray(parsedData)) {
+                subscriptions = parsedData;
+                break;
               }
+            } catch (parseError) {
+              console.warn('Failed to parse MCP content as JSON:', parseError);
             }
           }
         }
       }
       
-      console.log('Extracted subscriptions:', subscriptions?.length || 0);
-      
+      // Fallback to other possible formats
+      if (subscriptions.length === 0) {
+        if (result?.data?.data && Array.isArray(result.data.data)) {
+          subscriptions = result.data.data;
+        } else if (result?.data && Array.isArray(result.data)) {
+          subscriptions = result.data;
+        } else if (Array.isArray(result)) {
+          subscriptions = result;
+        }
+      }
+
       if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
-        throw new Error(`No subscription data retrieved from Stripe. Agent response: ${JSON.stringify(response)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
+        throw new Error(`No subscription data retrieved from Stripe. MCP result: ${JSON.stringify(result)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
       }
 
       console.log(`Successfully fetched ${subscriptions.length} subscriptions from Stripe`);
@@ -155,7 +157,7 @@ const fetchSubscriptionsStep = createStep({
   },
 });
 
-// Step 2: Analyze active subscribers using our tool
+// Step 2: Analyze active subscribers using our tool (raw data only)
 const analyzeActiveSubscribersStep = createStep({
   id: 'analyze-active-subscribers',
   description: 'Analyze active subscriber metrics from fetched subscription data',
@@ -166,7 +168,7 @@ const analyzeActiveSubscribersStep = createStep({
     includeTrialSubscriptions: z.boolean().describe('Whether trial subscriptions should be included'),
     growthPeriodDays: z.number().describe('Growth period for metrics'),
   }),
-  outputSchema: ActiveSubscribersWorkflowOutputSchema,
+  outputSchema: RawAnalysisOutputSchema,
 
   execute: async ({ inputData }) => {
     const { subscriptions, totalFetched, currency, includeTrialSubscriptions, growthPeriodDays } = inputData;
@@ -187,8 +189,11 @@ const analyzeActiveSubscribersStep = createStep({
 
       console.log(`Active subscribers analysis complete: ${analysisResult.totalActiveSubscriptions} active subscriptions from ${analysisResult.uniqueActiveCustomers} unique customers`);
 
+      // Return raw analysis data without explanation
+      const { explanation: _, ...rawAnalysis } = analysisResult;
+
       return {
-        ...analysisResult,
+        ...rawAnalysis,
         subscriptionsFetched: totalFetched,
       };
 
@@ -199,14 +204,83 @@ const analyzeActiveSubscribersStep = createStep({
   },
 });
 
+// Step 3: Generate human-readable explanation using agent
+const generateExplanationStep = createStep({
+  id: 'generate-explanation',
+  description: 'Generate human-readable explanation of the active subscribers analysis',
+  inputSchema: RawAnalysisOutputSchema,
+  outputSchema: ActiveSubscribersWorkflowOutputSchema,
+
+  execute: async ({ inputData }) => {
+    try {
+      console.log('Generating human-readable explanation for active subscribers analysis...');
+
+      // Create a summary of the raw analysis data
+      const analysisData = inputData;
+      const summary = `
+Active Subscribers Analysis Results:
+- Total Active Subscriptions: ${analysisData.totalActiveSubscriptions}
+- Unique Active Customers: ${analysisData.uniqueActiveCustomers}
+- Growth Rate: ${analysisData.growth.growthRate}% over ${analysisData.growth.periodDays} days
+- New Subscriptions: ${analysisData.growth.newSubscriptions}
+- Status Breakdown: ${JSON.stringify(analysisData.statusBreakdown)}
+- Plan Breakdown: ${analysisData.planBreakdown.length} different plans
+- Filters Applied: ${JSON.stringify(analysisData.filters)}
+- Subscriptions Fetched: ${analysisData.subscriptionsFetched}
+- Calculated At: ${analysisData.calculatedAt}
+      `;
+
+      // Get the stripe agent from MCP client  
+      const agent = await import('../agents/stripe-agent.js').then(m => m.stripeAgent);
+      
+      // Use the agent to generate a human-readable explanation
+      const response = await agent.generate([
+        { 
+          role: 'user', 
+          content: `Please provide a clear, business-friendly explanation of this active subscribers analysis. Focus on key insights and trends that would be valuable for business decision-making:
+
+${summary}
+
+Generate a concise but comprehensive explanation that covers:
+1. Overall subscription health
+2. Growth trends and what they indicate
+3. Customer distribution patterns
+4. Key metrics and their business implications
+5. Any notable insights from the data`
+        }
+      ]);
+
+      const explanation = response.text || 'Analysis completed successfully.';
+      
+      console.log('Generated explanation for active subscribers analysis');
+
+      return {
+        ...analysisData,
+        explanation,
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.warn(`Failed to generate explanation: ${errorMessage}. Using default explanation.`);
+      
+      // Return with a basic explanation if agent fails
+      return {
+        ...inputData,
+        explanation: `Active subscribers analysis completed. Found ${inputData.totalActiveSubscriptions} active subscriptions from ${inputData.uniqueActiveCustomers} unique customers with a ${inputData.growth.growthRate}% growth rate over the last ${inputData.growth.periodDays} days.`,
+      };
+    }
+  },
+});
+
 // Create the active subscribers workflow
 export const activeSubscribersWorkflow = createWorkflow({
   id: 'active-subscribers-workflow',
-  description: 'Fetch Stripe subscription data and analyze active subscriber metrics including counts, growth, and plan distribution',
+  description: 'Fetch Stripe subscription data, analyze active subscriber metrics, and generate human-readable insights',
   inputSchema: ActiveSubscribersWorkflowInputSchema,
   outputSchema: ActiveSubscribersWorkflowOutputSchema,
-  steps: [fetchSubscriptionsStep, analyzeActiveSubscribersStep],
+  steps: [fetchSubscriptionsStep, analyzeActiveSubscribersStep, generateExplanationStep],
 })
   .then(fetchSubscriptionsStep)
   .then(analyzeActiveSubscribersStep)
+  .then(generateExplanationStep)
   .commit();
