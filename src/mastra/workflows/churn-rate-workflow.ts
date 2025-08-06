@@ -94,61 +94,113 @@ const fetchSubscriptionsStep = createStep({
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - (periodDays + 90)); // Fetch extra to ensure we capture all relevant data
 
-      // Build parameters for the Stripe API call
-      const params: any = {
-        limit: limit,
-        created: { gte: Math.floor(startDate.getTime() / 1000) }, // Include historical data for churn analysis
-      };
-
-      // Add currency filter if specified
-      if (currency) {
-        params.currency = currency;
-      }
-
-      // Call stripe_list_subscriptions tool via tools
-      console.log('Calling stripe_list_subscriptions with params:', params);
-      const stripeTool = tools['stripe_list_subscriptions'];
-      const result = await stripeTool.execute({ context: params });
+      // Fetch both active and canceled subscriptions separately since 'all' status doesn't work
+      const allSubscriptions = [];
+      const statusesToFetch = ['active', 'canceled'];
       
-      console.log('Stripe MCP tool result:', JSON.stringify(result, null, 2));
+      for (const status of statusesToFetch) {
+        console.log(`Fetching ${status} subscriptions from Stripe...`);
+        
+        // Build parameters for the Stripe API call
+        const params: any = {
+          limit: limit,
+          status: status, // Fetch specific status (active or canceled)
+          created: { gte: Math.floor(startDate.getTime() / 1000) }, // Include historical data for churn analysis
+        };
 
-      // Extract subscriptions from the MCP result
-      let subscriptions = [];
-      
-      // Handle MCP response format with content array
-      if (result?.content && Array.isArray(result.content)) {
-        for (const contentItem of result.content) {
-          if (contentItem.type === 'text' && contentItem.text) {
-            try {
-              // Parse the JSON string from the text content
-              const parsedData = JSON.parse(contentItem.text);
-              if (Array.isArray(parsedData)) {
-                subscriptions = parsedData;
-                break;
+        // Add currency filter if specified
+        if (currency) {
+          params.currency = currency;
+        }
+
+        // Call stripe_list_subscriptions tool via tools
+        console.log(`Calling stripe_list_subscriptions with params for ${status}:`, params);
+        const stripeTool = tools['stripe_list_subscriptions'];
+        const result = await stripeTool.execute({ context: params });
+        
+        console.log(`Stripe MCP tool result for ${status}:`, JSON.stringify(result, null, 2));
+
+        // Extract subscriptions from the MCP result
+        let subscriptions = [];
+        
+        // Handle MCP response format with content array
+        if (result?.content && Array.isArray(result.content)) {
+          for (const contentItem of result.content) {
+            if (contentItem.type === 'text' && contentItem.text) {
+              try {
+                // Parse the JSON string from the text content
+                const parsedData = JSON.parse(contentItem.text);
+                if (Array.isArray(parsedData)) {
+                  subscriptions = parsedData;
+                  break;
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse MCP content as JSON:', parseError);
               }
-            } catch (parseError) {
-              console.warn('Failed to parse MCP content as JSON:', parseError);
             }
           }
         }
-      }
-      
-      // Fallback to other possible formats
-      if (subscriptions.length === 0) {
-        if (result?.data?.data && Array.isArray(result.data.data)) {
-          subscriptions = result.data.data;
-        } else if (result?.data && Array.isArray(result.data)) {
-          subscriptions = result.data;
-        } else if (Array.isArray(result)) {
-          subscriptions = result;
+        
+        // Fallback to other possible formats
+        if (subscriptions.length === 0) {
+          if (result?.data?.data && Array.isArray(result.data.data)) {
+            subscriptions = result.data.data;
+          } else if (result?.data && Array.isArray(result.data)) {
+            subscriptions = result.data;
+          } else if (Array.isArray(result)) {
+            subscriptions = result;
+          }
+        }
+        
+        if (Array.isArray(subscriptions) && subscriptions.length > 0) {
+          console.log(`Successfully fetched ${subscriptions.length} ${status} subscriptions`);
+          allSubscriptions.push(...subscriptions);
+        } else {
+          console.log(`No ${status} subscriptions found or unable to parse response`);
         }
       }
+      
+      // Use the combined subscriptions
+      const subscriptions = allSubscriptions;
 
       if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
-        throw new Error(`No subscription data retrieved from Stripe. MCP result: ${JSON.stringify(result)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
+        throw new Error(`No subscription data retrieved from Stripe. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
       }
 
-      console.log(`Successfully fetched ${subscriptions.length} subscriptions from Stripe`);
+      console.log(`Successfully fetched ${subscriptions.length} total subscriptions from Stripe (combined active and canceled)`);
+
+      // DEBUG: Log sample of fetched subscriptions to understand the data structure
+      console.log('=== SUBSCRIPTION DATA DEBUG ===');
+      console.log(`Total subscriptions: ${subscriptions.length}`);
+      
+      const activeCount = subscriptions.filter(sub => sub.status === 'active').length;
+      const canceledCount = subscriptions.filter(sub => sub.status === 'canceled').length;
+      console.log(`Active: ${activeCount}, Canceled: ${canceledCount}`);
+      
+      // Show sample canceled subscriptions to check for canceled_at field
+      const canceledSubs = subscriptions.filter(sub => sub.status === 'canceled').slice(0, 3);
+      if (canceledSubs.length > 0) {
+        console.log('Sample canceled subscriptions:');
+        for (const sub of canceledSubs) {
+          console.log(`  - ID: ${sub.id}, Customer: ${sub.customer}, Status: ${sub.status}`);
+          console.log(`    Created: ${sub.created ? new Date(sub.created * 1000).toISOString() : 'null'}`);
+          console.log(`    Canceled at: ${sub.canceled_at ? new Date(sub.canceled_at * 1000).toISOString() : 'null'}`);
+          console.log(`    Current status: ${sub.status}`);
+        }
+      } else {
+        console.log('No canceled subscriptions found in fetched data');
+      }
+      
+      // Show sample active subscriptions for comparison
+      const activeSubs = subscriptions.filter(sub => sub.status === 'active').slice(0, 3);
+      if (activeSubs.length > 0) {
+        console.log('Sample active subscriptions:');
+        for (const sub of activeSubs) {
+          console.log(`  - ID: ${sub.id}, Customer: ${sub.customer}, Status: ${sub.status}`);
+          console.log(`    Created: ${sub.created ? new Date(sub.created * 1000).toISOString() : 'null'}`);
+        }
+      }
+      console.log('=== END DEBUG ===');
 
       return {
         subscriptions,

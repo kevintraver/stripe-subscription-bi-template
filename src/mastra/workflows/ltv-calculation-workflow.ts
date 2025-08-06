@@ -88,62 +88,80 @@ const fetchSubscriptionsStep = createStep({
         throw new Error('stripe_list_subscriptions tool not available. Ensure Stripe MCP server is configured with STRIPE_SECRET_KEY.');
       }
 
-      // Build parameters for the Stripe API call
+      // Fetch both active and canceled subscriptions separately since 'all' status doesn't work
       // For LTV calculation, we need both active and canceled subscriptions
-      const params: any = {
-        limit: limit,
-        status: 'all', // Include all status types for churn analysis
-      };
-
-      // Add currency filter if specified
-      if (currency) {
-        params.currency = currency;
-      }
-
-      // Call stripe_list_subscriptions tool via tools
-      console.log('Calling stripe_list_subscriptions with params:', params);
-      const stripeTool = tools['stripe_list_subscriptions'];
-      const result = await stripeTool.execute({ context: params });
+      const allSubscriptions = [];
+      const statusesToFetch = ['active', 'canceled'];
       
-      console.log('Stripe MCP tool result:', JSON.stringify(result, null, 2));
+      for (const status of statusesToFetch) {
+        console.log(`Fetching ${status} subscriptions from Stripe for LTV calculation...`);
+        
+        // Build parameters for the Stripe API call
+        const params: any = {
+          limit: limit,
+          status: status, // Fetch specific status (active or canceled)
+        };
 
-      // Extract subscriptions from the MCP result
-      let subscriptions = [];
-      
-      // Handle MCP response format with content array
-      if (result?.content && Array.isArray(result.content)) {
-        for (const contentItem of result.content) {
-          if (contentItem.type === 'text' && contentItem.text) {
-            try {
-              // Parse the JSON string from the text content
-              const parsedData = JSON.parse(contentItem.text);
-              if (Array.isArray(parsedData)) {
-                subscriptions = parsedData;
-                break;
+        // Add currency filter if specified
+        if (currency) {
+          params.currency = currency;
+        }
+
+        // Call stripe_list_subscriptions tool via tools
+        console.log(`Calling stripe_list_subscriptions with params for ${status}:`, params);
+        const stripeTool = tools['stripe_list_subscriptions'];
+        const result = await stripeTool.execute({ context: params });
+        
+        console.log(`Stripe MCP tool result for ${status}:`, JSON.stringify(result, null, 2));
+
+        // Extract subscriptions from the MCP result
+        let subscriptions = [];
+        
+        // Handle MCP response format with content array
+        if (result?.content && Array.isArray(result.content)) {
+          for (const contentItem of result.content) {
+            if (contentItem.type === 'text' && contentItem.text) {
+              try {
+                // Parse the JSON string from the text content
+                const parsedData = JSON.parse(contentItem.text);
+                if (Array.isArray(parsedData)) {
+                  subscriptions = parsedData;
+                  break;
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse MCP content as JSON:', parseError);
               }
-            } catch (parseError) {
-              console.warn('Failed to parse MCP content as JSON:', parseError);
             }
           }
         }
-      }
-      
-      // Fallback to other possible formats
-      if (subscriptions.length === 0) {
-        if (result?.data?.data && Array.isArray(result.data.data)) {
-          subscriptions = result.data.data;
-        } else if (result?.data && Array.isArray(result.data)) {
-          subscriptions = result.data;
-        } else if (Array.isArray(result)) {
-          subscriptions = result;
+        
+        // Fallback to other possible formats
+        if (subscriptions.length === 0) {
+          if (result?.data?.data && Array.isArray(result.data.data)) {
+            subscriptions = result.data.data;
+          } else if (result?.data && Array.isArray(result.data)) {
+            subscriptions = result.data;
+          } else if (Array.isArray(result)) {
+            subscriptions = result;
+          }
+        }
+        
+        if (Array.isArray(subscriptions) && subscriptions.length > 0) {
+          console.log(`Successfully fetched ${subscriptions.length} ${status} subscriptions for LTV`);
+          allSubscriptions.push(...subscriptions);
+        } else {
+          console.log(`No ${status} subscriptions found or unable to parse response`);
         }
       }
+      
+      // Use the combined subscriptions
+      const subscriptions = allSubscriptions;
 
       if (!Array.isArray(subscriptions) || subscriptions.length === 0) {
-        throw new Error(`No subscription data retrieved from Stripe. MCP result: ${JSON.stringify(result)}. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
+        throw new Error(`No subscription data retrieved from Stripe. Check Stripe API connectivity and STRIPE_SECRET_KEY configuration.`);
       }
 
-      console.log(`Successfully fetched ${subscriptions.length} subscriptions from Stripe for LTV calculation`);
+      console.log(`Successfully fetched ${subscriptions.length} total subscriptions from Stripe (combined active and canceled) for LTV calculation`);
 
       return {
         subscriptions,
