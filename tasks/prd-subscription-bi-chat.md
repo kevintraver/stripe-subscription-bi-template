@@ -31,7 +31,7 @@ The primary problem this solves is the need for non-technical business stakehold
 3. DONE **The system must calculate Average Revenue Per User (ARPU)** by dividing current MRR by the number of active subscribers.
 4. DONE **The system must calculate Customer Churn Rate** by determining the percentage of customers who canceled subscriptions in the current month.
 5. **The system must calculate Revenue Churn Rate** by measuring MRR lost to cancellations as a percentage of starting period MRR.
-6. **The system must calculate Customer Lifetime Value (LTV)** using the formula: ARPU ÷ Churn Rate.
+6. DONE **The system must calculate Customer Lifetime Value (LTV)** using the formula: ARPU ÷ Churn Rate.
 7. **The system must calculate MRR Expansion** from subscription upgrades and plan changes to higher-value tiers.
 8. **The system must calculate MRR Contraction** from subscription downgrades and plan changes to lower-value tiers.
 9. **The system must calculate Average Subscription Duration** for churned customers by analyzing subscription start and end dates.

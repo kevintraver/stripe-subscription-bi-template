@@ -5,6 +5,7 @@ import { activeSubscribersWorkflow } from '../workflows/active-subscribers-workf
 import { mrrCalculationWorkflow } from '../workflows/mrr-calculation-workflow.js'
 import { arpuCalculationWorkflow } from '../workflows/arpu-calculation-workflow.js'
 import { churnRateWorkflow } from '../workflows/churn-rate-workflow.js'
+import { ltvCalculationWorkflow } from '../workflows/ltv-calculation-workflow.js'
 
 export const stripeAgent = new Agent({
   name: 'stripe-subscription-agent',
@@ -19,5 +20,6 @@ export const stripeAgent = new Agent({
     mrrCalculationWorkflow,
     arpuCalculationWorkflow,
     churnRateWorkflow,
+    ltvCalculationWorkflow,
   }
 })

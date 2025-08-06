@@ -43,6 +43,11 @@ const RawLTVOutputSchema = z.object({
     days: z.number().describe('Number of days in the churn analysis period'),
   }),
   calculatedAt: z.string().describe('ISO timestamp when calculation was performed'),
+  filters: z.object({
+    includeTrialSubscriptions: z.boolean(),
+    churnPeriodDays: z.number(),
+    currency: z.string().optional(),
+  }),
   dependencyResults: z.object({
     arpu: z.any().describe('Full ARPU calculation results'),
     churnRate: z.any().describe('Full churn rate calculation results'),
@@ -199,6 +204,11 @@ const calculateLTVStep = createStep({
 
       return {
         ...rawLTVData,
+        filters: {
+          includeTrialSubscriptions,
+          churnPeriodDays,
+          currency,
+        },
         subscriptionsFetched: totalFetched,
       };
 
@@ -210,13 +220,13 @@ const calculateLTVStep = createStep({
 });
 
 // Step 3: Generate human-readable explanation using agent
-const generateExplanationStep = createStep({
+const generateExplanationStep: any = createStep({
   id: 'generate-explanation',
   description: 'Generate human-readable explanation of the LTV calculation methodology',
   inputSchema: RawLTVOutputSchema,
   outputSchema: LTVWorkflowOutputSchema,
 
-  execute: async ({ inputData }) => {
+  execute: async ({ inputData }): Promise<any> => {
     try {
       console.log('Generating human-readable explanation for LTV calculation...');
 
@@ -224,48 +234,57 @@ const generateExplanationStep = createStep({
       const ltvData = inputData;
       const summary = `
 LTV (Customer Lifetime Value) Calculation Results:
-- LTV: $${ltvData.ltv}
-- ARPU (Average Revenue Per User): $${ltvData.arpu}
+- LTV: $${ltvData.ltv} ${ltvData.currency.toUpperCase()}
+- ARPU (Average Revenue Per User): $${ltvData.arpu} ${ltvData.currency.toUpperCase()}
 - Customer Churn Rate: ${ltvData.churnRate}%
 - Customer Retention Rate: ${ltvData.retentionRate}%
 - Average Customer Lifetime: ${ltvData.monthsToChurn} months
 - Total Customers Analyzed: ${ltvData.totalCustomers}
 - Active Subscriptions: ${ltvData.activeSubscriptions}
 - Churned Customers: ${ltvData.churnedCustomers}
-- Currency: ${ltvData.currency}
-- Analysis Period: ${ltvData.period.days} days (${ltvData.period.startDate} to ${ltvData.period.endDate})
+- Currency: ${ltvData.currency.toUpperCase()}
+- Analysis Period: ${ltvData.period.days} days (${new Date(ltvData.period.startDate).toLocaleDateString()} to ${new Date(ltvData.period.endDate).toLocaleDateString()})
 - Subscriptions Fetched: ${ltvData.subscriptionsFetched}
 - Calculated At: ${ltvData.calculatedAt}
 
+Filters Applied: ${JSON.stringify(ltvData.filters)}
+
 Methodology:
-- LTV = ARPU ÷ (Churn Rate / 100)
-- ARPU calculated from active subscriptions
-- Churn Rate calculated from customers who canceled in the analysis period
+- LTV = ARPU ÷ (Monthly Churn Rate)
+- ARPU calculated from ${ltvData.filters.includeTrialSubscriptions ? 'active subscriptions including trials' : 'active subscriptions excluding trials'}
+- Churn Rate calculated from customers who canceled in the ${ltvData.filters.churnPeriodDays}-day analysis period
+- Monthly churn rate normalized from ${ltvData.filters.churnPeriodDays}-day period
+
+Key Metrics:
+- Customer Value Ratio: $${ltvData.ltv} LTV vs $${ltvData.arpu} ARPU (${(ltvData.ltv / ltvData.arpu).toFixed(1)}x multiplier)
+- Customer Lifetime ROI: ${ltvData.monthsToChurn} months average relationship duration
+- Retention Performance: ${ltvData.retentionRate}% of customers retained during analysis period
       `;
 
       // Get the stripe agent
-      const agent = await import('../agents/stripe-agent.js').then(m => m.stripeAgent);
+      const agent: any = await import('../agents/stripe-agent.js').then(m => m.stripeAgent);
       
       // Use the agent to generate a human-readable explanation
-      const response = await agent.generate([
+      const response: any = await agent.generate([
         { 
           role: 'user', 
           content: `Please provide a clear, business-friendly explanation of this Customer Lifetime Value (LTV) analysis. Focus on key insights and actionable recommendations that would be valuable for business decision-making:
 
 ${summary}
 
-Generate a comprehensive explanation that covers:
-1. What the LTV metric means and why it's important
-2. The calculation methodology used (ARPU ÷ Churn Rate)
-3. Key insights from the calculated values
-4. What the churn rate and retention rate indicate about customer behavior
-5. How the average customer lifetime relates to business planning
-6. Actionable recommendations based on these metrics
-7. Any notable patterns or concerns in the data`
+Generate a concise but comprehensive explanation that covers:
+1. Overall customer value assessment and what the LTV indicates about the business sustainability
+2. The relationship between ARPU, churn rate, and customer lifetime in the calculation
+3. Customer value optimization opportunities and retention insights
+4. Business planning implications based on average customer lifetime
+5. Revenue forecasting insights and customer acquisition cost guidance
+6. Strategic recommendations for maximizing LTV through retention and revenue optimization
+7. Key performance indicators to monitor for improving customer lifetime value
+8. Any notable insights from the data that could inform customer success strategies`
         }
       ]);
 
-      const explanation = response.text || 'LTV calculation completed successfully.';
+      const explanation: string = response.text || 'LTV calculation completed successfully.';
       
       console.log('Generated explanation for LTV calculation');
 
@@ -288,7 +307,7 @@ Generate a comprehensive explanation that covers:
 });
 
 // Create the LTV calculation workflow
-export const ltvCalculationWorkflow = createWorkflow({
+export const ltvCalculationWorkflow: any = createWorkflow({
   id: 'ltv-calculation-workflow',
   description: 'Fetch Stripe subscription data, calculate Customer Lifetime Value (LTV) using ARPU ÷ Churn Rate formula, and generate human-readable insights',
   inputSchema: LTVWorkflowInputSchema,
