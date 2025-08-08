@@ -1,4 +1,4 @@
-## Stripe Subscription BI Chat Template (Mastra + Stripe MCP)
+## Business Analytics Agent Template
 
 This template provides a starting point for building a conversational Subscription BI assistant using Mastra and the official Stripe MCP server. It lets stakeholders ask natural‑language questions like “What’s our MRR this month?” and receive accurate, explainable metrics computed from Stripe subscription data. You can extend or swap tools, workflows, and the agent to match your business needs.
 
